@@ -93,18 +93,18 @@
   border-radius: 999px;
   background: var(--error-soft);
   color: #93000a;
-  padding: 7px 11px;
+  padding: 7px 12px;
   font-size: 0.7rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.livePill i {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--error);
+.livePill > span:first-child {
+  color: #93000a;
+  font-size: 18px;
+  font-variation-settings: "FILL" 1;
   animation: pulseLive 2s infinite;
 }
 
@@ -221,7 +221,7 @@
 .contentSection {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   padding: 18px;
 }
 
@@ -237,14 +237,14 @@
 
 .sectionTitle > span {
   color: var(--primary);
-  font-size: 28px;
+  font-size: 22px;
 }
 
 .eyebrow {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -252,42 +252,63 @@
   margin-top: 2px;
   color: var(--text);
   font-family: Montserrat, Inter, sans-serif;
-  font-size: clamp(1.15rem, 2vw, 1.35rem);
+  font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
 .rankingSummary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: start;
   border: 1px solid var(--outline);
   border-radius: var(--radius-sm);
-  background: var(--surface-low);
-  padding: 14px;
+  background:
+    linear-gradient(135deg, rgba(0, 108, 73, 0.08), transparent 58%),
+    var(--surface-low);
+  padding: 12px;
 }
 
 .rankingSummaryLabel {
   color: var(--secondary);
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   font-weight: 900;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .rankingSummary strong {
   display: block;
-  margin-top: 6px;
+  margin-top: 5px;
   color: var(--text);
   font-family: Montserrat, Inter, sans-serif;
-  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  font-size: 1.28rem;
   font-weight: 800;
   line-height: 1.1;
 }
 
 .rankingSummary p {
-  margin-top: 8px;
+  grid-column: 1 / -1;
+  margin-top: 0;
   color: var(--muted);
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: 0.78rem;
+  line-height: 1.42;
+}
+
+.rankingSummary b {
+  display: grid;
+  place-items: center;
+  min-width: 54px;
+  border-radius: 999px;
+  background: var(--secondary);
+  color: #ffffff;
+  font-family: Montserrat, Inter, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 900;
+  line-height: 1;
+  padding: 9px 10px;
 }
 
 .rankingBoard {
@@ -815,20 +836,21 @@
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--muted);
-  padding: 10px;
-  line-height: 1.35;
+  padding: 11px;
+  line-height: 1.4;
 }
 
 .emptyState strong {
   display: block;
   color: var(--text);
-  font-size: 0.68rem;
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .emptyState span {
   display: block;
-  margin-top: 3px;
-  font-size: 0.62rem;
+  margin-top: 4px;
+  font-size: 0.74rem;
 }
 
 .mobileNav {

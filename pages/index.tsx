@@ -1158,8 +1158,8 @@ export default function Home({ debateTranscript, liveStreamUrl, siteOrigin }: Ho
             </div>
             <div className={styles.topActions}>
               <div className={styles.livePill}>
-                <i />
-                <span>Ao vivo</span>
+                <span className="material-symbols-outlined">smart_toy</span>
+                <span>Análise de dados</span>
               </div>
             </div>
           </div>
@@ -1288,10 +1288,13 @@ export default function Home({ debateTranscript, liveStreamUrl, siteOrigin }: Ho
                 </section>
 
                 <div className={styles.rankingSummary}>
-                  <span className={styles.rankingSummaryLabel}>
-                    {debateRanking.length > 0 ? "Liderando agora" : "Placar em formação"}
-                  </span>
-                  <strong>{debateRanking[0]?.candidateName ?? "Aguardando dados"}</strong>
+                  <div>
+                    <span className={styles.rankingSummaryLabel}>
+                      {debateRanking.length > 0 ? "Liderando agora" : "Placar em formação"}
+                    </span>
+                    <strong>{duelLeader?.candidateName ?? "Aguardando dados"}</strong>
+                  </div>
+                  <b>{duelLeader ? `${duelLeader.share}%` : "--"}</b>
                   <p>{rankingSummary(debateRanking)}</p>
                 </div>
                 {debateRanking.length > 0 ? (
