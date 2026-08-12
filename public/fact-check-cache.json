@@ -834,5 +834,24 @@
     "source_url": "https://www.sp.gov.br/sp/institucional/estrutura/governador",
     "speaker_name": "Tarcísio de Freitas",
     "verdict": "unverifiable"
+  },
+  "haddad|807.279|901.92|Quem-fez-aqui-um-bom-trabalho-e-vejo-lhe-com-dificuldade-em-admitir-eu-nao-sei-porque-e-que-tem-dificuldade-de-admitir-o-merito-do-outro.-Voce-tem-merito-mas-quando-se-partilha-o-merito-com-outras-instituicoes-melhor": {
+    "block_summary": "Quem fez aqui um bom trabalho, e vejo lhe com dificuldade em admitir, eu não sei porque é que tem dificuldade de admitir o mérito do outro. Você tem mérito, mas quando se partilha o mérito com outras instituições, melhora o trabalho federativo. O Ministério Público foi essencial, essencial na operação do centro. Você sabes que o Lincol te procurou no teu gabinete para apresentar o programa de atuação no centro e sem o Ministério Público que é desrespeitado por falta de menção. Não, nada disto teria acontecido. Um autarca não vai conseguir combater o tráfico de droga. É a polícia que tem de combater. Agora, falando de segurança, Tarcísio, na segurança pública, nós estamos a ter uma epidemia. Epidemia de crimes contra as mulheres. Todo o tipo de crime é femicídio, é assédio, é lesão corporal, é importunação sexual, toda a tipo de crime, segundo o Fórum Brasileiro de Segurança Pública. Eu gosto de citar a fonte porque pode consultar em sua casa. Eu queria perguntar-lhe, por que é que você acredita que está a acontecer isso em São Paulo, sobretudo no que diz respeito à mulher e também ao racismo? Os crimes raciais estão a explodir em São Paulo e não tem um único um discurso para combater isso que afeta",
+    "checked_at": "2026-08-12T20:14:26.521Z",
+    "claim": "Quem fez aqui um bom trabalho, e vejo lhe com dificuldade em admitir, eu não sei porque é que tem dificuldade de admitir o mérito do outro. Você tem mérito, mas quando se partilha o mérito com outras instituições, melhora o trabalho federativo. O Ministério Público foi essencial, essencial na operação do centro. Você sabes que o Lincol te procurou no teu gabinete para apresentar o programa de atuação no centro e sem o Ministério Público que é desrespeitado por falta de menção. Não, nada disto teria acontecido. Um autarca não vai conseguir combater o tráfico de droga. É a polícia que tem de combater. Agora, falando de segurança, Tarcísio, na segurança pública, nós estamos a ter uma epidemia. Epidemia de crimes contra as mulheres. Todo o tipo de crime é femicídio, é assédio, é lesão corporal, é importunação sexual, toda a tipo de crime, segundo o Fórum Brasileiro de Segurança Pública. Eu gosto de citar a fonte porque pode consultar em sua casa. Eu queria perguntar-lhe, por que é que você acredita que está a acontecer isso em São Paulo, sobretudo no que diz respeito à mulher e também ao racismo? Os crimes raciais estão a explodir em São Paulo e não tem um único um discurso para combater isso que afeta",
+    "classification": "factual_claim",
+    "confidence": 0.45,
+    "evidence_notes": [
+      "Fonte encontrada por busca pública automática. O link serve como referência inicial, não como veredito definitivo."
+    ],
+    "main_line": "Quem fez aqui um bom trabalho, e vejo lhe com dificuldade em admitir, eu não sei porque é que tem dificuldade de admitir o mérito do outro.",
+    "reason": "",
+    "search_query": "Haddad femicídio São Paulo",
+    "should_display": true,
+    "source_label": "Fonte automática",
+    "source_title": "Haddad fala em \"epidemia\" de crimes contra mulheres em SP",
+    "source_url": "https://www.poder360.com.br/poder-eleicoes-2026/haddad-fala-em-epidemia-de-crimes-contra-mulheres-em-sp/",
+    "speaker_name": "Haddad",
+    "verdict": "unverifiable"
   }
 }
