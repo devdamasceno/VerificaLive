@@ -488,8 +488,86 @@ function buildFactCheckQuery(speaker: string, text: string) {
   return terms.length > 1 ? terms.join(" ") : `${speaker} ${firstMeaningfulLine(text)}`;
 }
 
+const blockedSourceHosts = [
+  "facebook.com",
+  "instagram.com",
+  "linkedin.com",
+  "tiktok.com",
+  "twitter.com",
+  "x.com",
+  "youtube.com",
+  "youtu.be",
+  "wa.me",
+  "whatsapp.com",
+  "wikipedia.org",
+  "wikimedia.org",
+  "wikidata.org",
+  "af.mil",
+  "lula.com.br",
+  "fernandohaddad.com.br",
+  "haddad.com.br",
+  "tarcisiodefreitas.com.br",
+  "tarcisio.com.br",
+  "pt.org.br",
+  "republicanos10.org.br",
+];
+
+function normalizeForUrlMatch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function hostContainsCandidate(host: string, candidateName: string | undefined) {
+  const normalizedHost = normalizeForUrlMatch(host);
+  const candidate = normalizeForUrlMatch(candidateName || "");
+
+  if (!candidate) {
+    return false;
+  }
+
+  const nameParts = (candidateName || "")
+    .split(/\s+/)
+    .map(normalizeForUrlMatch)
+    .filter((part) => part.length >= 5);
+
+  return normalizedHost.includes(candidate) || nameParts.some((part) => normalizedHost.includes(part));
+}
+
+function looksLikeBiographyPage(urlValue: string, titleValue?: string | null) {
+  const target = `${urlValue} ${titleValue || ""}`.toLowerCase();
+  return /\b(biography|biographies|biografia|perfil|profile)\b/i.test(target);
+}
+
+function isReliableSourceUrl(value: unknown, speakerName?: string, sourceTitle?: string | null) {
+  if (typeof value !== "string" || !value.trim()) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    const cleanHost = host.replace(/^www\./, "");
+
+    return (
+      ["http:", "https:"].includes(url.protocol)
+      && !host.includes("google.")
+      && !host.includes("bing.")
+      && !host.includes("duckduckgo.")
+      && !cleanHost.endsWith(".mil")
+      && !blockedSourceHosts.some((blockedHost) => cleanHost === blockedHost || cleanHost.endsWith(`.${blockedHost}`))
+      && !hostContainsCandidate(cleanHost, speakerName)
+      && !looksLikeBiographyPage(value, sourceTitle)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function hasDirectSource(analysis: BlockAnalysis) {
-  return Boolean(analysis.source_url && !analysis.source_url.includes("google."));
+  return isReliableSourceUrl(analysis.source_url, analysis.speaker_name, analysis.source_title);
 }
 
 function sourceStatusLabel(analysis: BlockAnalysis) {
@@ -660,15 +738,6 @@ function toneStatusLabel(text: string, analysis: BlockAnalysis) {
   return "Neutro";
 }
 
-function shouldShowReason(reason: string | undefined) {
-  const value = reason?.trim() ?? "";
-  if (!value) {
-    return false;
-  }
-
-  return !/sem usar créditos de IA|sem usar creditos de IA|checada em fonte externa|fala organizada para leitura/i.test(value);
-}
-
 function toneScore(tone: string) {
   switch (tone) {
     case "Positivo":
@@ -729,12 +798,39 @@ function buildDebateRanking(
     ranking.set(candidateName, current);
   }
 
-  return [...ranking.values()]
+  const sorted = [...ranking.values()]
     .map((item) => ({
       ...item,
       score: Math.round(item.score),
     }))
     .sort((left, right) => right.score - left.score || right.directSources - left.directSources || right.speeches - left.speeches);
+  const minScore = Math.min(0, ...sorted.map((item) => item.score));
+  const normalizedScores = sorted.map((item) => item.score - minScore + 1);
+  const totalScore = normalizedScores.reduce((sum, score) => sum + score, 0) || 1;
+
+  return sorted.map((item, index) => ({
+    ...item,
+    share: Math.round((normalizedScores[index] / totalScore) * 100),
+  }));
+}
+
+function rankingSummary(ranking: ReturnType<typeof buildDebateRanking>) {
+  if (ranking.length === 0) {
+    return "Aguardando falas suficientes para medir o desempenho.";
+  }
+
+  const leader = ranking[0];
+  const second = ranking[1];
+  if (!second) {
+    return `${leader.candidateName} lidera a leitura parcial com ${leader.speeches} falas analisadas.`;
+  }
+
+  const gap = leader.share - second.share;
+  if (gap <= 6) {
+    return `Debate equilibrado: ${leader.candidateName} aparece ligeiramente à frente, com diferença pequena no placar parcial.`;
+  }
+
+  return `${leader.candidateName} lidera o placar parcial com ${leader.share}% da barra, puxado por tom, volume e fontes encontradas.`;
 }
 
 function loadTranscriptFile(videoId: string): TranscriptFile | null {
@@ -798,21 +894,6 @@ function blockTimeRange(block: SpeechBlock) {
 
 function hasConfirmedCandidate(block: SpeechBlock) {
   return Boolean(cleanCandidateName(block.speaker_name ?? "") && block.speaker_id);
-}
-
-function shortTitle(value: string | undefined) {
-  const fallback = "Debate eleitoral";
-  const cleaned = (value || fallback)
-    .replace(/^Acompanhe\s+na\s+íntegra\s+/i, "")
-    .replace(/^Acompanhe\s+na\s+integra\s+/i, "")
-    .replace(/^o\s+debate\s+da\s+Band\s+entre\s+/i, "Debate Band: ")
-    .replace(/^debate\s+da\s+Band\s+entre\s+/i, "Debate Band: ")
-    .replace(/\s+ao\s+governo\s+de\s+São\s+Paulo\b/i, "")
-    .replace(/\s+ao\s+governo\s+de\s+Sao\s+Paulo\b/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return cleaned || fallback;
 }
 
 export const getServerSideProps: GetServerSideProps<HomeProps> = async ({ req }) => {
@@ -959,12 +1040,9 @@ export default function Home({ debateTranscript, liveStreamUrl, siteOrigin }: Ho
   const debateRanking = useMemo(() =>
     buildDebateRanking(visibleBlocks, checkedAnalyses),
   [checkedAnalyses, visibleBlocks]);
-  const names = candidateNames(liveTranscript, candidateBlocks);
-  const checkedCount = candidateBlocks.filter((block) => block.analysis?.source_url && !block.analysis.source_url.includes("google.")).length;
-  const captureStatus = blocks.length > 0 ? "Legenda recebida" : "Aguardando captura";
-  const candidateStatus = names.length > 0 ? `${names.length} candidatos` : "Aguardando candidatos";
-  const speechStatus = candidateBlocks.length > 0 ? `${candidateBlocks.length} falas validas` : "Aguardando dados";
-  const checkStatus = checkedCount > 0 ? `${checkedCount} fontes diretas` : "Checagem pendente";
+  const duelLeader = debateRanking[0];
+  const duelChallenger = debateRanking[1];
+  const names = candidateNames(liveTranscript, visibleBlocks);
   const latestKey = feedBlocks.at(0)
     ? `${feedBlocks.at(0)?.index}-${feedBlocks.at(0)?.start}-${feedBlocks.at(0)?.speaker_id ?? "unknown"}`
     : "";
@@ -1064,175 +1142,264 @@ export default function Home({ debateTranscript, liveStreamUrl, siteOrigin }: Ho
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className={styles.page}>
-        <div className={styles.shell}>
-          <header className={styles.topbar}>
+      <main id="top" className={styles.page}>
+        <header className={styles.topbar}>
+          <div className={styles.topbarInner}>
             <div className={styles.brand}>
               <Image
                 className={styles.brandLogo}
                 src="/logo.png"
                 alt="VerificaLive"
-                width={172}
-                height={58}
+                width={345}
+                height={43}
                 priority
               />
-              <div className={styles.brandText}>
-                <strong>VerificaLive</strong>
-                <span>Captura, autoria e checagem</span>
+              <span className={styles.brandSubtitle}>Monitoramento de debate em tempo real</span>
+            </div>
+            <div className={styles.topActions}>
+              <div className={styles.livePill}>
+                <i />
+                <span>Ao vivo</span>
               </div>
             </div>
-            <div className={styles.statusPill}>Feed dinamico</div>
-          </header>
+          </div>
+        </header>
 
-          <section className={styles.stage}>
-            <div className={styles.playerPanel}>
-              {videoId ? (
-                <div ref={playerMountRef} className={styles.youtubePlayer} />
-              ) : (
-                <div className={styles.emptyPlayer}>Configure LIVE_STREAM_URL</div>
-              )}
-            </div>
-
-            <aside className={styles.pipelinePanel}>
-              <div>
-                <p className={styles.eyebrow}>Resumo</p>
-                <h1>{shortTitle(liveTranscript?.title)}</h1>
-              </div>
-              <div className={styles.summaryStatus}>
-                <strong>{speechStatus}</strong>
-                <span>{captureStatus}</span>
-              </div>
-              <div className={styles.summaryGrid}>
-                <div>
-                  <span>Candidatos</span>
-                  <strong>{candidateStatus}</strong>
-                </div>
-                <div>
-                  <span>Fonte real</span>
-                  <strong>{checkStatus}</strong>
-                </div>
-                <div>
-                  <span>Feed</span>
-                  <strong>{feedBlocks.length > 0 ? "Atual no topo" : "Sem falas"}</strong>
-                </div>
-              </div>
-            </aside>
-          </section>
-
-          <section className={styles.workspace}>
-            <aside className={styles.rosterPanel}>
-              <p className={styles.eyebrow}>Ranking</p>
-              <div className={styles.rankingList}>
-                {debateRanking.length > 0 ? debateRanking.map((candidate, index) => {
-                  return (
-                    <article key={candidate.candidateName}>
-                      <div className={styles.rankHeader}>
-                        <span>{index + 1}</span>
-                        <strong>{candidate.candidateName}</strong>
-                      </div>
-                      <div className={styles.rankScore}>
-                        <strong>{candidate.score > 0 ? `+${candidate.score}` : candidate.score}</strong>
-                        <span>pontos</span>
-                      </div>
-                      <dl>
-                        <div>
-                          <dt>Falas</dt>
-                          <dd>{candidate.speeches}</dd>
-                        </div>
-                        <div>
-                          <dt>Positivas</dt>
-                          <dd>{candidate.positive}</dd>
-                        </div>
-                        <div>
-                          <dt>Negativas</dt>
-                          <dd>{candidate.negative}</dd>
-                        </div>
-                        <div>
-                          <dt>Fontes</dt>
-                          <dd>{candidate.directSources}</dd>
-                        </div>
-                      </dl>
-                    </article>
-                  );
-                }) : (
-                  <p className={styles.muted}>Aguardando falas suficientes para formar o ranking.</p>
+        <div className={styles.shell}>
+          <div className={styles.appFrame}>
+            <div className={styles.mainColumn}>
+              <section className={styles.playerPanel}>
+                {videoId ? (
+                  <div ref={playerMountRef} className={styles.youtubePlayer} />
+                ) : (
+                  <div className={styles.emptyPlayer}>Configure LIVE_STREAM_URL</div>
                 )}
-              </div>
-            </aside>
+              </section>
 
-            <section className={styles.feedPanel}>
-              <div className={styles.feedHeader}>
-                <div>
-                  <p className={styles.eyebrow}>Falas por candidato</p>
-                  <h2>Feed cronologico analisado</h2>
+              <section id="feed" className={styles.feedPanel}>
+                <div className={styles.feedHeader}>
+                  <div className={styles.sectionTitle}>
+                    <span className="material-symbols-outlined">dynamic_feed</span>
+                    <div>
+                      <p className={styles.eyebrow}>Falas por candidato</p>
+                      <h2>Feed de checagem</h2>
+                    </div>
+                  </div>
+                  <span>{feedBlocks.length} visiveis</span>
                 </div>
-                <span>{feedBlocks.length} visiveis</span>
-              </div>
 
-              <div className={styles.feedList}>
-                {feedBlocks.length > 0 ? feedBlocks.map((block, index) => {
-                  const blockId = blockIdentity(block);
-                  const speaker = cleanCandidateName(block.analysis?.speaker_name || block.speaker_name || "");
-                  const analysis = {
-                    ...analysisForBlock(block),
-                    ...checkedAnalyses[blockId],
-                  };
-                  const isChecking = Boolean(checkingIds[blockId]);
-                  const text = analysis.block_summary || analysis.claim || block.text;
+                <div className={styles.feedList}>
+                  {feedBlocks.length > 0 ? feedBlocks.map((block, index) => {
+                    const blockId = blockIdentity(block);
+                    const speaker = cleanCandidateName(block.analysis?.speaker_name || block.speaker_name || "");
+                    const analysis = {
+                      ...analysisForBlock(block),
+                      ...checkedAnalyses[blockId],
+                    };
+                    const isChecking = Boolean(checkingIds[blockId]);
+                    const text = analysis.block_summary || analysis.claim || block.text;
+                    const hasSource = hasDirectSource(analysis);
+                    const status = toneStatusLabel(text, analysis);
+                    const verificationClass = hasSource
+                      ? styles.feedCheckSuccess
+                      : isChecking
+                        ? styles.feedCheckPending
+                        : styles.feedCheckNeutral;
+                    const verificationIcon = hasSource
+                      ? "check_circle"
+                      : isChecking
+                        ? "hourglass_empty"
+                        : "info";
+                    const verificationText = hasSource
+                      ? (analysis.reason || "Fonte real encontrada para apoiar a checagem desta fala.")
+                      : isChecking
+                        ? "Buscando uma fonte real e independente para validar esta fala."
+                        : "Aguardando fonte real. Páginas de candidatos, partidos, redes sociais e buscadores não entram como referência.";
 
-                  return (
-                    <article
-                      className={styles.feedItem}
-                      key={`${block.index}-${block.start}-${block.speaker_id ?? "unknown"}`}
-                      ref={index === 0 ? latestRef : null}
-                    >
-                      <div className={styles.feedTop}>
-                        <time>{blockTimeRange(block)}</time>
-                        <span>{speaker}</span>
+                    return (
+                      <article
+                        className={styles.feedItem}
+                        key={`${block.index}-${block.start}-${block.speaker_id ?? "unknown"}`}
+                        ref={index === 0 ? latestRef : null}
+                      >
+                        <div className={styles.feedTop}>
+                          <div>
+                            <i />
+                            <span>{speaker}</span>
+                          </div>
+                          <time>{blockTimeRange(block)}</time>
+                        </div>
+                        <p className={styles.feedQuote}>{text}</p>
+                        <div className={`${styles.feedCheckBox} ${verificationClass}`}>
+                          <span className="material-symbols-outlined">{verificationIcon}</span>
+                          <div>
+                            <strong>{hasSource ? "Fonte real validada" : isChecking ? "Checagem em andamento" : "Fonte real pendente"}</strong>
+                            <p>{verificationText}</p>
+                            {hasSource ? (
+                              <a
+                                className={styles.sourceLink}
+                                href={analysis.source_url ?? ""}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {analysis.source_title || analysis.source_label || "Abrir fonte"}
+                              </a>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className={styles.feedTags}>
+                          <span>Tipo: {classificationLabel(analysis.classification)}</span>
+                          <span>Status: {status}</span>
+                          <span>{hasSource ? "Fonte real" : isChecking ? "Checando agora" : sourceStatusLabel(analysis)}</span>
+                        </div>
+                      </article>
+                    );
+                  }) : (
+                    <div className={styles.emptyState}>
+                      <strong>Aguardando dados</strong>
+                      <span>Assim que uma fala de candidato for identificada, ela aparece aqui no topo.</span>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
+
+            <aside id="ranking" className={styles.feedColumn}>
+              <section className={styles.contentSection}>
+                <div className={styles.sectionTitle}>
+                  <span className="material-symbols-outlined">bar_chart</span>
+                  <div>
+                    <p className={styles.eyebrow}>Ranking</p>
+                    <h2>Performance dos candidatos</h2>
+                  </div>
+                </div>
+
+                <section className={styles.metricGrid} aria-label="Resumo do debate">
+                  <div className={styles.metricCard}>
+                    <span className={`material-symbols-outlined ${styles.metricIcon}`}>record_voice_over</span>
+                    <strong>{visibleBlocks.length}</strong>
+                    <span>Falas capturadas</span>
+                  </div>
+                  <div className={styles.metricCard}>
+                    <span className={`material-symbols-outlined ${styles.metricIcon}`}>groups</span>
+                    <strong>{names.length}</strong>
+                    <span>Candidatos</span>
+                  </div>
+                </section>
+
+                <div className={styles.rankingSummary}>
+                  <span className={styles.rankingSummaryLabel}>
+                    {debateRanking.length > 0 ? "Liderando agora" : "Placar em formação"}
+                  </span>
+                  <strong>{debateRanking[0]?.candidateName ?? "Aguardando dados"}</strong>
+                  <p>{rankingSummary(debateRanking)}</p>
+                </div>
+                {debateRanking.length > 0 ? (
+                  <div className={styles.rankingBoard} aria-label="Distribuição percentual do ranking">
+                    <div className={styles.duelArena}>
+                      <div className={styles.duelSide}>
+                        <span>{duelLeader?.candidateName.charAt(0)}</span>
+                        <strong>{duelLeader?.candidateName}</strong>
+                        <b>{duelLeader?.share}%</b>
                       </div>
-                      <p className={styles.feedQuote}>{text}</p>
-                      <div className={styles.analysisStrip}>
-                        <div>
-                          <span>Tipo</span>
-                          <strong>{classificationLabel(analysis.classification)}</strong>
-                        </div>
-                        <div>
-                          <span>Status</span>
-                          <strong>{toneStatusLabel(text, analysis)}</strong>
-                        </div>
-                        <div>
-                          <span>Fonte</span>
-                          {hasDirectSource(analysis) ? (
-                            <a
-                              className={styles.sourceLink}
-                              href={analysis.source_url ?? ""}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              {analysis.source_title || analysis.source_label || "Abrir fonte"}
-                            </a>
-                          ) : (
-                            <strong>{isChecking ? "Analisando fonte" : sourceStatusLabel(analysis)}</strong>
-                          )}
-                        </div>
-                        <div>
-                          <span>Automação</span>
-                          <strong>{hasDirectSource(analysis) ? "Fonte encontrada" : isChecking ? "Checando agora" : "Fila de checagem"}</strong>
-                        </div>
+                      <div className={styles.duelMeter} aria-label="Área de duelo do ranking">
+                        <i
+                          className={styles.duelLeaderBar}
+                          style={{ width: `${Math.max(6, (duelLeader?.share ?? 0) / 2)}%` }}
+                        />
+                        <em>VS</em>
+                        <i
+                          className={styles.duelChallengerBar}
+                          style={{ width: `${Math.max(6, (duelChallenger?.share ?? 0) / 2)}%` }}
+                        />
                       </div>
-                      {shouldShowReason(analysis.reason) ? <p className={styles.reason}>{analysis.reason}</p> : null}
-                    </article>
-                  );
-                }) : (
+                      <div className={`${styles.duelSide} ${styles.duelSideRight}`}>
+                        <span>{duelChallenger?.candidateName.charAt(0) ?? "?"}</span>
+                        <strong>{duelChallenger?.candidateName ?? "Aguardando rival"}</strong>
+                        <b>{duelChallenger?.share ?? 0}%</b>
+                      </div>
+                    </div>
+                    <div className={styles.rankingList}>
+                      {debateRanking.map((candidate, index) => {
+                        return (
+                          <article
+                            className={index === 0 ? styles.rankCardLead : ""}
+                            key={candidate.candidateName}
+                          >
+                            <div className={styles.rankHeader}>
+                              <span>{candidate.candidateName.charAt(0)}</span>
+                              <div>
+                                <strong>{candidate.candidateName}</strong>
+                                <small>{candidate.speeches} falas analisadas</small>
+                              </div>
+                            </div>
+                            <div className={styles.rankScore}>
+                              <strong>{candidate.score > 0 ? `+${candidate.score}` : candidate.score} pts</strong>
+                              <span>Força: {candidate.share}%</span>
+                            </div>
+                            <div className={styles.rankingBarTrack}>
+                              <i
+                                className={index === 0 ? styles.rankingBarLead : ""}
+                                style={{ width: `${Math.max(4, candidate.share)}%` }}
+                              />
+                            </div>
+                            <dl>
+                              <div>
+                                <dt>Positivas</dt>
+                                <dd>{candidate.positive}</dd>
+                              </div>
+                              <div>
+                                <dt>Negativas</dt>
+                                <dd>{candidate.negative}</dd>
+                              </div>
+                              <div>
+                                <dt>Fontes</dt>
+                                <dd>{candidate.directSources}</dd>
+                              </div>
+                              <div>
+                                <dt>Ranking</dt>
+                                <dd>#{index + 1}</dd>
+                              </div>
+                            </dl>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
                   <div className={styles.emptyState}>
                     <strong>Aguardando dados</strong>
-                    <span>Assim que uma fala de candidato for identificada, ela aparece aqui no topo.</span>
+                    <span>O ranking aparece quando as primeiras falas de candidatos forem identificadas.</span>
                   </div>
                 )}
-              </div>
-            </section>
-          </section>
+                <div className={styles.rankingLegend}>
+                  <span>Cálculo</span>
+                  <ul>
+                    <li><b>+2</b> positiva</li>
+                    <li><b>0</b> neutra</li>
+                    <li><b>-2</b> negativa</li>
+                    <li><b>+1</b> fonte</li>
+                    <li><b>-1</b> sem fonte</li>
+                  </ul>
+                </div>
+              </section>
+            </aside>
+          </div>
         </div>
+        <nav className={styles.mobileNav} aria-label="Navegação móvel">
+          <a href="#top">
+            <span className="material-symbols-outlined">live_tv</span>
+            Ao vivo
+          </a>
+          <a href="#ranking">
+            <span className="material-symbols-outlined">groups</span>
+            Candidatos
+          </a>
+          <a href="#feed">
+            <span className="material-symbols-outlined">history</span>
+            Histórico
+          </a>
+        </nav>
       </main>
     </>
   );

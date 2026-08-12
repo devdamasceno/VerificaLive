@@ -51,7 +51,60 @@ function writeCache(cache: Record<string, FactCheckResult>) {
   fs.writeFileSync(CACHE_PATH, JSON.stringify(cache, null, 2), "utf8");
 }
 
-function isDirectSourceUrl(value: unknown) {
+const blockedSourceHosts = [
+  "facebook.com",
+  "instagram.com",
+  "linkedin.com",
+  "tiktok.com",
+  "twitter.com",
+  "x.com",
+  "youtube.com",
+  "youtu.be",
+  "wa.me",
+  "whatsapp.com",
+  "wikipedia.org",
+  "wikimedia.org",
+  "wikidata.org",
+  "af.mil",
+  "lula.com.br",
+  "fernandohaddad.com.br",
+  "haddad.com.br",
+  "tarcisiodefreitas.com.br",
+  "tarcisio.com.br",
+  "pt.org.br",
+  "republicanos10.org.br",
+];
+
+function normalizeForUrlMatch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function hostContainsCandidate(host: string, candidateName: string | undefined) {
+  const normalizedHost = normalizeForUrlMatch(host);
+  const candidate = normalizeForUrlMatch(candidateName || "");
+
+  if (!candidate) {
+    return false;
+  }
+
+  const parts = (candidateName || "")
+    .split(/\s+/)
+    .map(normalizeForUrlMatch)
+    .filter((part) => part.length >= 5);
+
+  return normalizedHost.includes(candidate) || parts.some((part) => normalizedHost.includes(part));
+}
+
+function looksLikeBiographyPage(urlValue: string, titleValue?: string | null) {
+  const target = `${urlValue} ${titleValue || ""}`.toLowerCase();
+  return /\b(biography|biographies|biografia|perfil|profile)\b/i.test(target);
+}
+
+function isReliableSourceUrl(value: unknown, requestBody?: FactCheckRequest, sourceTitle?: string | null) {
   if (typeof value !== "string" || !value.trim()) {
     return false;
   }
@@ -59,11 +112,17 @@ function isDirectSourceUrl(value: unknown) {
   try {
     const url = new URL(value);
     const host = url.hostname.toLowerCase();
+    const cleanHost = host.replace(/^www\./, "");
+
     return (
       ["http:", "https:"].includes(url.protocol)
       && !host.includes("google.")
       && !host.includes("bing.")
       && !host.includes("duckduckgo.")
+      && !cleanHost.endsWith(".mil")
+      && !blockedSourceHosts.some((blockedHost) => cleanHost === blockedHost || cleanHost.endsWith(`.${blockedHost}`))
+      && !hostContainsCandidate(cleanHost, requestBody?.candidate_name)
+      && !looksLikeBiographyPage(value, sourceTitle)
     );
   } catch {
     return false;
@@ -147,7 +206,7 @@ async function searchPublicSource(requestBody: FactCheckRequest): Promise<FactCh
         url,
       };
     })
-    .find((item) => isDirectSourceUrl(item.url));
+    .find((item) => isReliableSourceUrl(item.url, requestBody, item.title));
 
   if (!firstResult) {
     throw new Error("Nenhuma fonte direta encontrada na busca pública.");
@@ -179,7 +238,10 @@ function normalizeResult(
   parsed: Record<string, unknown>,
   requestBody: FactCheckRequest,
 ): FactCheckResult {
-  const sourceUrl = isDirectSourceUrl(parsed.source_url) ? String(parsed.source_url) : null;
+  const parsedSourceTitle = parsed.source_title ? String(parsed.source_title).trim() : null;
+  const sourceUrl = isReliableSourceUrl(parsed.source_url, requestBody, parsedSourceTitle)
+    ? String(parsed.source_url)
+    : null;
   const evidenceNotes = Array.isArray(parsed.evidence_notes)
     ? parsed.evidence_notes.map((note) => String(note).trim()).filter(Boolean)
     : [];
